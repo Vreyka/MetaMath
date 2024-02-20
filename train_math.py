@@ -23,6 +23,7 @@ import torch
 import transformers
 from torch.utils.data import Dataset
 from transformers import Trainer, BitsAndBytesConfig
+import bitsandbytes as bnb
 import argparse
 import json
 import random;random.seed(42)
@@ -94,6 +95,43 @@ def accuracy(predictions, references, normalize=True, sample_weight=None):
             )
         )
     }
+    
+def compute_metrics(eval_preds):
+    preds, labels = eval_preds
+    # preds have the same shape as the labels, after the argmax(-1) has been calculated
+    # by preprocess_logits_for_metrics, we need to shift the labels
+    labels = labels[:, 1:].reshape(-1)
+    preds = preds[:, :-1].reshape(-1)
+    return accuracy(predictions=preds, references=labels)
+
+def preprocess_logits_for_metrics(logits, labels):
+    if isinstance(logits, tuple):
+        # Depending on the model and config, logits may contain extra tensors,
+        # like past_key_values, but logits always come first
+        logits = logits[0]
+    return logits.argmax(dim=-1)
+
+def find_all_linear_names(peft_model, int4=False, int8=False):
+    """Find all linear layer names in the model. reference from qlora paper."""
+    cls = torch.nn.Linear
+    if int4 or int8:
+        import bitsandbytes as bnb
+
+        if int4:
+            cls = bnb.nn.Linear4bit
+        elif int8:
+            cls = bnb.nn.Linear8bitLt
+    lora_module_names = set()
+    for name, module in peft_model.named_modules():
+        if isinstance(module, cls):
+            # last layer is not add to lora_module_names
+            if "lm_head" in name:
+                continue
+            if "output_layer" in name:
+                continue
+            names = name.split(".")
+            lora_module_names.add(names[0] if len(names) == 1 else names[-1])
+    return sorted(lora_module_names)
 
 def safe_save_model_for_hf_trainer(trainer: transformers.Trainer, output_dir: str):
     """Collects the state dict and dump to disk."""
@@ -269,6 +307,31 @@ def train():
     data_args.data_length = int(remaining_args[1])
     print("USING PEFT TRAINING: ", remaining_args[3])
     use_peft = remaining_args[3] == 'True'
+    
+    #load tokenizer
+    tokenizer = transformers.AutoTokenizer.from_pretrained(
+        model_args.model_name_or_path,
+        #cache_dir=training_args.cache_dir,
+        model_max_length=training_args.model_max_length,
+        padding_side="right",
+        use_fast=False,
+    )
+    if tokenizer.pad_token is None:
+        smart_tokenizer_and_embedding_resize(
+            special_tokens_dict=dict(pad_token=DEFAULT_PAD_TOKEN),
+            tokenizer=tokenizer,
+            model=model,
+        )
+    if "llama" in model_args.model_name_or_path:
+        tokenizer.add_special_tokens(
+            {
+                "eos_token": DEFAULT_EOS_TOKEN,
+                "bos_token": DEFAULT_BOS_TOKEN,
+                "unk_token": DEFAULT_UNK_TOKEN,
+            }
+        )
+        
+        
     if use_peft:
         bnb_config = BitsAndBytesConfig(
             load_in_4bit=True,
@@ -310,27 +373,7 @@ def train():
             model_args.model_name_or_path,
         )
 
-    tokenizer = transformers.AutoTokenizer.from_pretrained(
-        model_args.model_name_or_path,
-        #cache_dir=training_args.cache_dir,
-        model_max_length=training_args.model_max_length,
-        padding_side="right",
-        use_fast=False,
-    )
-    if tokenizer.pad_token is None:
-        smart_tokenizer_and_embedding_resize(
-            special_tokens_dict=dict(pad_token=DEFAULT_PAD_TOKEN),
-            tokenizer=tokenizer,
-            model=model,
-        )
-    if "llama" in model_args.model_name_or_path:
-        tokenizer.add_special_tokens(
-            {
-                "eos_token": DEFAULT_EOS_TOKEN,
-                "bos_token": DEFAULT_BOS_TOKEN,
-                "unk_token": DEFAULT_UNK_TOKEN,
-            }
-        )
+    
 
     data_module = make_supervised_data_module(tokenizer=tokenizer, data_args=data_args)
     trainer = Trainer(model=model, tokenizer=tokenizer, args=training_args, **data_module)

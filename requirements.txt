@@ -5,7 +5,7 @@ sentencepiece==0.1.99
 tokenizers>=0.13.3
 accelerate==0.21.0
 bitsandbytes
-vllm
+vllm==0.2.5
 fraction
 tqdm
 numpy
