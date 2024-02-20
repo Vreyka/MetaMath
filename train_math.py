@@ -48,7 +48,7 @@ DEFAULT_BOS_TOKEN = "<s>"
 DEFAULT_UNK_TOKEN = "<unk>"
 PROMPT_DICT = {
     "prompt_input": (
-        "Below is an instruction that describes a task, paired with an input that provides further context. "
+        "Act as you are a really good in explaination, apply the technique Feyman really well, I will give you one question and the task of you is to answer with explain (the answer will be provided, you just need to answer why the answer is this), because this is related to math so have a explain step by step is cool but remember that, your answer is in Vietnamese, you should answer me in Vietnamese language"
         "Write a response that appropriately completes the request.\n\n"
         "### Instruction:\n{instruction}\n\n### Input:\n{input}\n\n### Response:"
     ),

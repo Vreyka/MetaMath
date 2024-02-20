@@ -4,7 +4,7 @@ torch==2.0.1
 sentencepiece==0.1.99
 tokenizers>=0.13.3
 accelerate==0.21.0
-bitsandbytes==0.40.0
+bitsandbytes
 vllm
 fraction
 tqdm
