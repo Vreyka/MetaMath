@@ -83,6 +83,17 @@ class TrainingArguments(transformers.TrainingArguments):
     )
     overwrite_output_dir: bool = field(default=True)
 
+def accuracy(predictions, references, normalize=True, sample_weight=None):
+    return {
+        "accuracy": float(
+            accuracy_score(
+                references,
+                predictions,
+                normalize=normalize,
+                sample_weight=sample_weight,
+            )
+        )
+    }
 
 def safe_save_model_for_hf_trainer(trainer: transformers.Trainer, output_dir: str):
     """Collects the state dict and dump to disk."""
